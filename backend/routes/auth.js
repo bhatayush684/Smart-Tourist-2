@@ -42,7 +42,7 @@ router.post('/register', [
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
   body('role')
-    .isIn(['tourist', 'admin', 'government'])
+    .isIn(['tourist', 'admin', 'police', 'id_issuer'])
     .withMessage('Invalid role')
 ], async (req, res) => {
   try {
@@ -56,10 +56,10 @@ router.post('/register', [
       });
     }
 
-    const { name, email, password, role, nationality, phone } = req.body;
+    const { name, email, password, role, nationality, phone, department, badgeNumber, location, idType } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findOne({ where: { email } });
+    const existingUser = await User.findByEmail(email);
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -67,8 +67,19 @@ router.post('/register', [
       });
     }
 
+    // Check for unique badge number if police
+    if (role === 'police' && badgeNumber) {
+      const existingBadge = await User.findOne({ badgeNumber });
+      if (existingBadge) {
+        return res.status(400).json({
+          success: false,
+          message: 'Badge number already exists'
+        });
+      }
+    }
+
     // Create user
-    const user = await User.create({
+    const userData = {
       name,
       email,
       password,
@@ -77,14 +88,27 @@ router.post('/register', [
         ipAddress: req.ip,
         userAgent: req.get('User-Agent')
       }
-    });
+    };
 
-<<<<<<< HEAD
+    // Add role-specific fields
+    if (role === 'police') {
+      userData.department = department;
+      userData.badgeNumber = badgeNumber;
+      userData.location = location;
+    } else if (role === 'id_issuer') {
+      userData.location = location;
+      userData.idType = idType;
+    }
+
+    const user = new User(userData);
+
+    await user.save();
+
     // Try creating a tourist profile if role is tourist, but don't block registration on validation failure
     if (role === 'tourist') {
       try {
-        const tourist = await Tourist.create({
-          userId: user.id,
+        const tourist = new Tourist({
+          userId: user._id,
           personalInfo: {
             firstName: name.split(' ')[0],
             lastName: name.split(' ').slice(1).join(' ') || '',
@@ -97,36 +121,16 @@ router.post('/register', [
             purposeOfVisit: 'tourism'
           }
         });
+
+        await tourist.save();
       } catch (touristErr) {
         console.warn('Tourist profile not created during registration (will prompt later):', touristErr.message);
       }
-=======
-    await user.save();
-
-    // Create tourist profile if role is tourist
-    if (role === 'tourist') {
-      const tourist = new Tourist({
-        userId: user._id,
-        personalInfo: {
-          firstName: name.split(' ')[0],
-          lastName: name.split(' ').slice(1).join(' ') || '',
-          nationality: nationality || 'Unknown',
-          phoneNumber: phone || ''
-        },
-        travelInfo: {
-          arrivalDate: new Date(),
-          departureDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-          purposeOfVisit: 'tourism'
-        }
-      });
-
-      await tourist.save();
->>>>>>> cce787370a13878a3a10ef8f2239e60890db898f
     }
 
     // Generate tokens
-    const token = generateToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
+    const token = generateToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
 
     // Remove password from response
     const userResponse = user.toJSON();
@@ -175,10 +179,7 @@ router.post('/login', [
     const { email, password } = req.body;
 
     // Find user and include password for comparison
-    const user = await User.findOne({
-      where: { email },
-      attributes: { include: ['password'] }
-    });
+    const user = await User.findByEmail(email).select('+password');
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -187,7 +188,7 @@ router.post('/login', [
     }
 
     // Check if account is locked
-    if (typeof user.isLocked === 'function' && user.isLocked()) {
+    if (user.isLocked) {
       return res.status(423).json({
         success: false,
         message: 'Account is temporarily locked due to too many failed login attempts'
@@ -202,26 +203,47 @@ router.post('/login', [
       });
     }
 
+    // Check if user account is pending approval
+    if (user.status === 'pending') {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is pending approval. Please wait for admin approval.',
+        status: 'pending'
+      });
+    }
+
+    // Check if user account is suspended
+    if (user.status === 'suspended') {
+      return res.status(403).json({
+        success: false,
+        message: 'Account has been suspended. Please contact support.',
+        status: 'suspended'
+      });
+    }
+
     // Check password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
-      try { if (typeof user.incLoginAttempts === 'function') await user.incLoginAttempts(); } catch {}
+      // Increment login attempts
+      await user.incLoginAttempts();
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
       });
     }
 
-    // Reset login attempts on successful login (if implemented)
-    try { if (user.loginAttempts > 0 && typeof user.resetLoginAttempts === 'function') await user.resetLoginAttempts(); } catch {}
+    // Reset login attempts on successful login
+    if (user.loginAttempts > 0) {
+      await user.resetLoginAttempts();
+    }
 
     // Update last login
     user.lastLogin = new Date();
     await user.save();
 
     // Generate tokens
-    const token = generateToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
+    const token = generateToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
 
     // Remove password from response
     const userResponse = user.toJSON();
@@ -259,7 +281,7 @@ router.post('/refresh', [
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
     
     // Check if user still exists and is active
-    const user = await User.findByPk(decoded.userId);
+    const user = await User.findById(decoded.userId);
     if (!user || !user.isActive) {
       return res.status(401).json({
         success: false,
@@ -268,8 +290,8 @@ router.post('/refresh', [
     }
 
     // Generate new tokens
-    const newToken = generateToken(user.id);
-    const newRefreshToken = generateRefreshToken(user.id);
+    const newToken = generateToken(user._id);
+    const newRefreshToken = generateRefreshToken(user._id);
 
     res.json({
       success: true,
@@ -349,7 +371,7 @@ router.post('/forgot-password', [
   try {
     const { email } = req.body;
 
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findByEmail(email);
     if (!user) {
       // Don't reveal if email exists or not
       return res.json({
@@ -360,7 +382,7 @@ router.post('/forgot-password', [
 
     // Generate reset token
     const resetToken = jwt.sign(
-      { userId: user.id },
+      { userId: user._id },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
@@ -405,13 +427,11 @@ router.post('/reset-password', [
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     // Find user with valid reset token
-    const user = await User.findOne({ where: {
-      id: decoded.userId,
-      resetPasswordToken: token
-    }});
-    if (user && user.resetPasswordExpires && user.resetPasswordExpires < Date.now()) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
-    }
+    const user = await User.findOne({
+      _id: decoded.userId,
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
 
     if (!user) {
       return res.status(400).json({
@@ -456,7 +476,7 @@ router.put('/change-password', [
     const { currentPassword, newPassword } = req.body;
 
     // Find user with password
-    const user = await User.findByPk(req.user._id, { attributes: { include: ['password'] } });
+    const user = await User.findById(req.user._id).select('+password');
     
     // Check current password
     const isCurrentPasswordValid = await user.comparePassword(currentPassword);
