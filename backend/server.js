@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
@@ -7,6 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const { sequelize, testConnection } = require('./config/database');
 require('dotenv').config();
 
 // Import routes
@@ -185,59 +185,26 @@ app.use('*', (req, res) => {
 // Database connection
 const connectDB = async () => {
   try {
-    const mongoURI = process.env.NODE_ENV === 'test' 
-      ? process.env.MONGODB_TEST_URI 
-      : process.env.MONGODB_URI || 'mongodb://localhost:27017/tourist-safety-platform';
-      
-    console.log('Connecting to MongoDB:', mongoURI);
+    console.log('Connecting to PostgreSQL...');
     
-    await mongoose.connect(mongoURI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    // Test connection
+    const connected = await testConnection();
+    if (!connected) {
+      throw new Error('PostgreSQL connection failed');
+    }
     
-    console.log('✅ MongoDB connected successfully');
-    
-    // Create indexes for better performance
-    await createIndexes();
+    // Sync database models with timeout
+    console.log('Syncing database models...');
+    await Promise.race([
+      sequelize.sync({ alter: true }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Model sync timeout')), 30000))
+    ]);
+    console.log('✅ PostgreSQL connected and models synced successfully');
     
   } catch (error) {
-    console.error('❌ MongoDB connection error:', error);
+    console.error('❌ PostgreSQL connection error:', error);
     console.log('⚠️  Starting server without database connection...');
     // Don't exit, just continue without database
-  }
-};
-
-// Create database indexes
-const createIndexes = async () => {
-  try {
-    const Tourist = require('./models/Tourist');
-    const Device = require('./models/Device');
-    const Alert = require('./models/Alert');
-    
-    // Tourist indexes
-    await Tourist.collection.createIndex({ email: 1 }, { unique: true });
-    await Tourist.collection.createIndex({ touristId: 1 }, { unique: true });
-    await Tourist.collection.createIndex({ 'location.coordinates': '2dsphere' });
-    await Tourist.collection.createIndex({ status: 1 });
-    await Tourist.collection.createIndex({ createdAt: -1 });
-    
-    // Device indexes
-    await Device.collection.createIndex({ deviceId: 1 }, { unique: true });
-    await Device.collection.createIndex({ touristId: 1 });
-    await Device.collection.createIndex({ status: 1 });
-    await Device.collection.createIndex({ lastUpdate: -1 });
-    
-    // Alert indexes
-    await Alert.collection.createIndex({ touristId: 1 });
-    await Alert.collection.createIndex({ type: 1 });
-    await Alert.collection.createIndex({ severity: 1 });
-    await Alert.collection.createIndex({ createdAt: -1 });
-    await Alert.collection.createIndex({ status: 1 });
-    
-    console.log('✅ Database indexes created successfully');
-  } catch (error) {
-    console.error('❌ Error creating indexes:', error);
   }
 };
 
@@ -248,11 +215,11 @@ const gracefulShutdown = () => {
   server.close(() => {
     console.log('✅ HTTP server closed');
     
-    mongoose.connection.close().then(() => {
-      console.log('✅ MongoDB connection closed');
+    sequelize.close().then(() => {
+      console.log('✅ PostgreSQL connection closed');
       process.exit(0);
     }).catch((err) => {
-      console.error('❌ Error closing MongoDB connection:', err);
+      console.error('❌ Error closing PostgreSQL connection:', err);
       process.exit(1);
     });
   });
@@ -272,13 +239,22 @@ process.on('SIGINT', gracefulShutdown);
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
-  await connectDB();
-  
+  // Start server immediately
   server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV}`);
     console.log(`🌐 WebSocket server ready`);
     console.log(`📡 Health check: http://localhost:${PORT}/health`);
+  });
+  
+  // Try to connect to database in background (non-blocking)
+  setImmediate(async () => {
+    try {
+      await connectDB();
+    } catch (error) {
+      console.error('❌ Database connection failed:', error.message);
+      console.log('⚠️  Server running without database...');
+    }
   });
 };
 

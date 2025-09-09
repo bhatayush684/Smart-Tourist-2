@@ -59,7 +59,7 @@ router.post('/register', [
     const { name, email, password, role, nationality, phone } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findByEmail(email);
+    const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -68,7 +68,7 @@ router.post('/register', [
     }
 
     // Create user
-    const user = new User({
+    const user = await User.create({
       name,
       email,
       password,
@@ -79,13 +79,11 @@ router.post('/register', [
       }
     });
 
-    await user.save();
-
     // Try creating a tourist profile if role is tourist, but don't block registration on validation failure
     if (role === 'tourist') {
       try {
-        const tourist = new Tourist({
-          userId: user._id,
+        const tourist = await Tourist.create({
+          userId: user.id,
           personalInfo: {
             firstName: name.split(' ')[0],
             lastName: name.split(' ').slice(1).join(' ') || '',
@@ -98,16 +96,14 @@ router.post('/register', [
             purposeOfVisit: 'tourism'
           }
         });
-
-        await tourist.save();
       } catch (touristErr) {
         console.warn('Tourist profile not created during registration (will prompt later):', touristErr.message);
       }
     }
 
     // Generate tokens
-    const token = generateToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
+    const token = generateToken(user.id);
+    const refreshToken = generateRefreshToken(user.id);
 
     // Remove password from response
     const userResponse = user.toJSON();
@@ -156,7 +152,10 @@ router.post('/login', [
     const { email, password } = req.body;
 
     // Find user and include password for comparison
-    const user = await User.findByEmail(email).select('+password');
+    const user = await User.findOne({
+      where: { email },
+      attributes: { include: ['password'] }
+    });
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -165,7 +164,7 @@ router.post('/login', [
     }
 
     // Check if account is locked
-    if (user.isLocked) {
+    if (typeof user.isLocked === 'function' && user.isLocked()) {
       return res.status(423).json({
         success: false,
         message: 'Account is temporarily locked due to too many failed login attempts'
@@ -181,28 +180,25 @@ router.post('/login', [
     }
 
     // Check password
-    const isPasswordValid = await user.comparePassword(password);
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      // Increment login attempts
-      await user.incLoginAttempts();
+      try { if (typeof user.incLoginAttempts === 'function') await user.incLoginAttempts(); } catch {}
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
       });
     }
 
-    // Reset login attempts on successful login
-    if (user.loginAttempts > 0) {
-      await user.resetLoginAttempts();
-    }
+    // Reset login attempts on successful login (if implemented)
+    try { if (user.loginAttempts > 0 && typeof user.resetLoginAttempts === 'function') await user.resetLoginAttempts(); } catch {}
 
     // Update last login
     user.lastLogin = new Date();
     await user.save();
 
     // Generate tokens
-    const token = generateToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
+    const token = generateToken(user.id);
+    const refreshToken = generateRefreshToken(user.id);
 
     // Remove password from response
     const userResponse = user.toJSON();
@@ -240,7 +236,7 @@ router.post('/refresh', [
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
     
     // Check if user still exists and is active
-    const user = await User.findById(decoded.userId);
+    const user = await User.findByPk(decoded.userId);
     if (!user || !user.isActive) {
       return res.status(401).json({
         success: false,
@@ -249,8 +245,8 @@ router.post('/refresh', [
     }
 
     // Generate new tokens
-    const newToken = generateToken(user._id);
-    const newRefreshToken = generateRefreshToken(user._id);
+    const newToken = generateToken(user.id);
+    const newRefreshToken = generateRefreshToken(user.id);
 
     res.json({
       success: true,
@@ -330,7 +326,7 @@ router.post('/forgot-password', [
   try {
     const { email } = req.body;
 
-    const user = await User.findByEmail(email);
+    const user = await User.findOne({ where: { email } });
     if (!user) {
       // Don't reveal if email exists or not
       return res.json({
@@ -341,7 +337,7 @@ router.post('/forgot-password', [
 
     // Generate reset token
     const resetToken = jwt.sign(
-      { userId: user._id },
+      { userId: user.id },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
@@ -386,11 +382,13 @@ router.post('/reset-password', [
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     // Find user with valid reset token
-    const user = await User.findOne({
-      _id: decoded.userId,
-      resetPasswordToken: token,
-      resetPasswordExpires: { $gt: Date.now() }
-    });
+    const user = await User.findOne({ where: {
+      id: decoded.userId,
+      resetPasswordToken: token
+    }});
+    if (user && user.resetPasswordExpires && user.resetPasswordExpires < Date.now()) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
+    }
 
     if (!user) {
       return res.status(400).json({
@@ -435,7 +433,7 @@ router.put('/change-password', [
     const { currentPassword, newPassword } = req.body;
 
     // Find user with password
-    const user = await User.findById(req.user._id).select('+password');
+    const user = await User.findByPk(req.user._id, { attributes: { include: ['password'] } });
     
     // Check current password
     const isCurrentPasswordValid = await user.comparePassword(currentPassword);
