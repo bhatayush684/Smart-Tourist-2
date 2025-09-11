@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const { sequelize } = require('../config/database');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
@@ -7,12 +7,15 @@ const User = require('../models/User');
 
 const createDefaultUser = async () => {
   try {
-    // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/tourist-safety-platform');
-    console.log('✅ Connected to MongoDB');
+    // Connect to PostgreSQL
+    await sequelize.authenticate();
+    console.log('✅ Connected to PostgreSQL');
+
+    // Sync models
+    await sequelize.sync({ alter: true });
 
     // Check if admin user already exists
-    const existingAdmin = await User.findOne({ email: 'admin@touristsafety.gov.in' });
+    const existingAdmin = await User.findByEmail('admin@touristsafety.gov.in');
     if (existingAdmin) {
       console.log('⚠️  Admin user already exists');
       console.log('📧 Email: admin@touristsafety.gov.in');
@@ -21,7 +24,7 @@ const createDefaultUser = async () => {
     }
 
     // Create default admin user
-    const adminUser = new User({
+    const adminUser = await User.create({
       name: 'System Administrator',
       email: 'admin@touristsafety.gov.in',
       password: 'admin123',
@@ -39,14 +42,13 @@ const createDefaultUser = async () => {
       }
     });
 
-    await adminUser.save();
     console.log('✅ Default admin user created successfully!');
     console.log('📧 Email: admin@touristsafety.gov.in');
     console.log('🔑 Password: admin123');
     console.log('👤 Role: admin');
 
     // Create a sample tourist user
-    const touristUser = new User({
+    const touristUser = await User.create({
       name: 'John Doe',
       email: 'tourist@example.com',
       password: 'tourist123',
@@ -64,7 +66,6 @@ const createDefaultUser = async () => {
       }
     });
 
-    await touristUser.save();
     console.log('✅ Sample tourist user created successfully!');
     console.log('📧 Email: tourist@example.com');
     console.log('🔑 Password: tourist123');

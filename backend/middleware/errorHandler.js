@@ -5,23 +5,29 @@ const errorHandler = (err, req, res, next) => {
   // Log error
   console.error('Error:', err);
 
-  // Mongoose bad ObjectId
-  if (err.name === 'CastError') {
-    const message = 'Resource not found';
-    error = { message, statusCode: 404 };
+  // Sequelize validation errors
+  if (err.name === 'SequelizeValidationError') {
+    const message = err.errors.map(e => e.message).join(', ');
+    error = { message, statusCode: 400 };
   }
 
-  // Mongoose duplicate key
-  if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
+  // Sequelize unique constraint error
+  if (err.name === 'SequelizeUniqueConstraintError') {
+    const field = err.errors[0]?.path || 'field';
     const message = `${field} already exists`;
     error = { message, statusCode: 400 };
   }
 
-  // Mongoose validation error
-  if (err.name === 'ValidationError') {
-    const message = Object.values(err.errors).map(val => val.message).join(', ');
+  // Sequelize foreign key constraint error
+  if (err.name === 'SequelizeForeignKeyConstraintError') {
+    const message = 'Invalid reference to related resource';
     error = { message, statusCode: 400 };
+  }
+
+  // Sequelize database connection error
+  if (err.name === 'SequelizeConnectionError') {
+    const message = 'Database connection error';
+    error = { message, statusCode: 500 };
   }
 
   // JWT errors

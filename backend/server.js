@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
@@ -7,6 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const { sequelize, testConnection } = require('./config/database');
 require('dotenv').config();
 
 // Import routes
@@ -189,60 +189,24 @@ app.use('*', (req, res) => {
 // Database connection
 const connectDB = async () => {
   try {
-    const mongoURI = process.env.NODE_ENV === 'test' 
-      ? process.env.MONGODB_TEST_URI 
-      : process.env.MONGODB_URI || 'mongodb://localhost:27017/tourist-safety-platform';
-      
-    console.log('Connecting to MongoDB:', mongoURI);
+    console.log('Connecting to PostgreSQL...');
     
-    await mongoose.connect(mongoURI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    // Test the connection
+    const isConnected = await testConnection();
     
-    console.log('✅ MongoDB connected successfully');
-    
-    // Create indexes for better performance
-    await createIndexes();
+    if (isConnected) {
+      // Sync all models with the database
+      await sequelize.sync({ alter: true });
+      console.log('✅ PostgreSQL database synced successfully');
+    } else {
+      throw new Error('Failed to connect to PostgreSQL');
+    }
     
   } catch (error) {
-    console.error('❌ MongoDB connection error:', error);
+    console.error('❌ PostgreSQL connection error:', error);
     console.log('⚠️  Starting server without database connection...');
-    console.log('💡 To fix this, install MongoDB or use MongoDB Atlas');
+    console.log('💡 To fix this, ensure PostgreSQL is running and credentials are correct');
     // Don't exit, just continue without database
-  }
-};
-
-// Create database indexes
-const createIndexes = async () => {
-  try {
-    const Tourist = require('./models/Tourist');
-    const Device = require('./models/Device');
-    const Alert = require('./models/Alert');
-    
-    // Tourist indexes
-    await Tourist.collection.createIndex({ email: 1 }, { unique: true });
-    await Tourist.collection.createIndex({ touristId: 1 }, { unique: true });
-    await Tourist.collection.createIndex({ 'location.coordinates': '2dsphere' });
-    await Tourist.collection.createIndex({ status: 1 });
-    await Tourist.collection.createIndex({ createdAt: -1 });
-    
-    // Device indexes
-    await Device.collection.createIndex({ deviceId: 1 }, { unique: true });
-    await Device.collection.createIndex({ touristId: 1 });
-    await Device.collection.createIndex({ status: 1 });
-    await Device.collection.createIndex({ lastUpdate: -1 });
-    
-    // Alert indexes
-    await Alert.collection.createIndex({ touristId: 1 });
-    await Alert.collection.createIndex({ type: 1 });
-    await Alert.collection.createIndex({ severity: 1 });
-    await Alert.collection.createIndex({ createdAt: -1 });
-    await Alert.collection.createIndex({ status: 1 });
-    
-    console.log('✅ Database indexes created successfully');
-  } catch (error) {
-    console.error('❌ Error creating indexes:', error);
   }
 };
 
@@ -253,9 +217,11 @@ const gracefulShutdown = () => {
   server.close(() => {
     console.log('✅ HTTP server closed');
     
-    mongoose.connection.close(false, () => {
-      console.log('✅ MongoDB connection closed');
+    sequelize.close().then(() => {
+      console.log('✅ PostgreSQL connection closed');
       process.exit(0);
+    }).catch(() => {
+      process.exit(1);
     });
   });
   

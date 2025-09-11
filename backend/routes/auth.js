@@ -100,15 +100,13 @@ router.post('/register', [
       userData.idType = idType;
     }
 
-    const user = new User(userData);
-
-    await user.save();
+    const user = await User.create(userData);
 
     // Try creating a tourist profile if role is tourist, but don't block registration on validation failure
     if (role === 'tourist') {
       try {
-        const tourist = new Tourist({
-          userId: user._id,
+        await Tourist.create({
+          userId: user.id,
           personalInfo: {
             firstName: name.split(' ')[0],
             lastName: name.split(' ').slice(1).join(' ') || '',
@@ -121,16 +119,14 @@ router.post('/register', [
             purposeOfVisit: 'tourism'
           }
         });
-
-        await tourist.save();
       } catch (touristErr) {
         console.warn('Tourist profile not created during registration (will prompt later):', touristErr.message);
       }
     }
 
     // Generate tokens
-    const token = generateToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
+    const token = generateToken(user.id);
+    const refreshToken = generateRefreshToken(user.id);
 
     // Remove password from response
     const userResponse = user.toJSON();
@@ -179,7 +175,10 @@ router.post('/login', [
     const { email, password } = req.body;
 
     // Find user and include password for comparison
-    const user = await User.findByEmail(email).select('+password');
+    const user = await User.findOne({ 
+      where: { email: email.toLowerCase() },
+      attributes: { include: ['password'] }
+    });
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -242,8 +241,8 @@ router.post('/login', [
     await user.save();
 
     // Generate tokens
-    const token = generateToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
+    const token = generateToken(user.id);
+    const refreshToken = generateRefreshToken(user.id);
 
     // Remove password from response
     const userResponse = user.toJSON();
@@ -281,7 +280,7 @@ router.post('/refresh', [
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
     
     // Check if user still exists and is active
-    const user = await User.findById(decoded.userId);
+    const user = await User.findByPk(decoded.userId);
     if (!user || !user.isActive) {
       return res.status(401).json({
         success: false,
@@ -290,8 +289,8 @@ router.post('/refresh', [
     }
 
     // Generate new tokens
-    const newToken = generateToken(user._id);
-    const newRefreshToken = generateRefreshToken(user._id);
+    const newToken = generateToken(user.id);
+    const newRefreshToken = generateRefreshToken(user.id);
 
     res.json({
       success: true,
@@ -340,7 +339,7 @@ router.get('/verify', authenticateToken, async (req, res) => {
     // Get tourist profile if user is a tourist
     let touristProfile = null;
     if (user.role === 'tourist') {
-      touristProfile = await Tourist.findOne({ userId: user._id });
+      touristProfile = await Tourist.findOne({ userId: user.id });
     }
 
     res.json({
@@ -382,7 +381,7 @@ router.post('/forgot-password', [
 
     // Generate reset token
     const resetToken = jwt.sign(
-      { userId: user._id },
+      { userId: user.id },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
@@ -476,7 +475,9 @@ router.put('/change-password', [
     const { currentPassword, newPassword } = req.body;
 
     // Find user with password
-    const user = await User.findById(req.user._id).select('+password');
+    const user = await User.findByPk(req.user.id, {
+      attributes: { include: ['password'] }
+    });
     
     // Check current password
     const isCurrentPasswordValid = await user.comparePassword(currentPassword);
