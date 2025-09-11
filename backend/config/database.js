@@ -2,18 +2,18 @@ const { Sequelize } = require('sequelize');
 
 // PostgreSQL connection configuration
 const sequelize = new Sequelize({
-  database: 'tourist_safety_platform',
-  username: 'postgres',
-  password: '123456',
-  host: 'localhost',
-  port: 5432,
   dialect: 'postgres',
-  logging: console.log, // Set to false in production
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5001,
+  database: process.env.DB_NAME || 'tourist_safety_platform',
+  username: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || '',
+  logging: false,
   pool: {
     max: 5,
     min: 0,
     acquire: 30000,
-    idle: 10000
+    idle: 10000,
   },
   define: {
     timestamps: true,
@@ -29,7 +29,8 @@ const testConnection = async () => {
     console.log('✅ PostgreSQL connection established successfully');
     return true;
   } catch (error) {
-    console.error('❌ Unable to connect to PostgreSQL:', error);
+    console.error('❌ Unable to connect to PostgreSQL:', error.message);
+    console.log('💡 Continuing without database for now...');
     return false;
   }
 };

@@ -14,44 +14,56 @@ const router = express.Router();
 router.get('/dashboard', requireAdmin, async (req, res) => {
   try {
     // Get statistics
-    const totalUsers = await User.countDocuments({ isActive: true });
-    const totalTourists = await Tourist.countDocuments({ isActive: true });
-    const totalDevices = await Device.countDocuments({ isActive: true });
-    const totalAlerts = await Alert.countDocuments({ isActive: true });
+    const totalUsers = await User.count({ where: { isActive: true } });
+    const totalTourists = await Tourist.count({ where: { isActive: true } });
+    const totalDevices = await Device.count({ where: { isActive: true } });
+    const totalAlerts = await Alert.count({ where: { isActive: true } });
 
     // Get active alerts by severity
-    const activeAlerts = await Alert.find({ status: 'active', isActive: true });
+    const activeAlerts = await Alert.findAll({ where: { status: 'active', isActive: true } });
     const alertsBySeverity = activeAlerts.reduce((acc, alert) => {
       acc[alert.severity] = (acc[alert.severity] || 0) + 1;
       return acc;
     }, {});
 
     // Get device statistics
-    const deviceStats = await Device.aggregate([
-      { $match: { isActive: true } },
-      { $group: { _id: '$status', count: { $sum: 1 } } }
-    ]);
+    const deviceStats = await Device.findAll({
+      attributes: ['status', [sequelize.fn('COUNT', '*'), 'count']],
+      where: { isActive: true },
+      group: ['status']
+    });
 
     // Get tourist statistics
-    const touristStats = await Tourist.aggregate([
-      { $match: { isActive: true } },
-      { $group: { _id: '$status', count: { $sum: 1 } } }
-    ]);
+    const touristStats = await Tourist.findAll({
+      attributes: ['status', [sequelize.fn('COUNT', '*'), 'count']],
+      where: { isActive: true },
+      group: ['status']
+    });
 
     // Get recent alerts
-    const recentAlerts = await Alert.find({ isActive: true })
-      .populate('touristId', 'touristId personalInfo.firstName personalInfo.lastName')
-      .sort({ createdAt: -1 })
-      .limit(10);
+    const recentAlerts = await Alert.findAll({
+      where: { isActive: true },
+      include: [{
+        model: Tourist,
+        attributes: ['touristId', 'personalInfo']
+      }],
+      order: [['createdAt', 'DESC']],
+      limit: 10
+    });
 
     // Get critical alerts
-    const criticalAlerts = await Alert.find({
-      severity: 'critical',
-      status: { $in: ['active', 'acknowledged'] },
-      isActive: true
-    })
-      .populate('touristId', 'touristId personalInfo.firstName personalInfo.lastName')
-      .sort({ createdAt: -1 });
+    const criticalAlerts = await Alert.findAll({
+      where: {
+        severity: 'critical',
+        status: ['active', 'acknowledged'],
+        isActive: true
+      },
+      include: [{
+        model: Tourist,
+        attributes: ['touristId', 'personalInfo']
+      }],
+      order: [['createdAt', 'DESC']]
+    });
 
     res.json({
       success: true,
@@ -771,16 +783,12 @@ router.put('/users/:id/reactivate', requireAdmin, async (req, res) => {
 // Helper function to check database health
 const checkDatabaseHealth = async () => {
   try {
-    const mongoose = require('mongoose');
-    const state = mongoose.connection.readyState;
+    const { sequelize } = require('../config/database');
+    await sequelize.authenticate();
     
-    if (state === 1) {
-      // Test a simple query
-      await User.findOne().limit(1);
-      return 'healthy';
-    } else {
-      return 'unhealthy';
-    }
+    // Test a simple query
+    await User.findOne({ limit: 1 });
+    return 'healthy';
   } catch (error) {
     return 'unhealthy';
   }

@@ -13,7 +13,11 @@ import {
   Eye,
   FileText,
   Zap,
-  Clock
+  Clock,
+  BarChart3,
+  Bell,
+  RefreshCw,
+  Settings
 } from 'lucide-react';
 
 interface Tourist {
@@ -120,6 +124,16 @@ const AdminDashboard = () => {
     }
   };
 
+  const [activeTab, setActiveTab] = useState('overview');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'iot-monitor', label: 'IoT Monitor', icon: Activity },
+    { id: 'tourists', label: 'Tourists', icon: Users },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-surface">
       <div className="container mx-auto p-6 space-y-8">
@@ -128,7 +142,7 @@ const AdminDashboard = () => {
             <h1 className="text-4xl font-bold text-foreground">Admin Dashboard</h1>
             <p className="text-xl text-muted-foreground">Monitor and manage tourist safety in real-time</p>
           </div>
-          <Button variant="government" size="lg">
+          <Button variant="default" size="lg">
             <Download className="w-4 h-4" />
             Export Report
           </Button>

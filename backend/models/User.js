@@ -1,233 +1,226 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 const bcrypt = require('bcryptjs');
 
-const userSchema = new mongoose.Schema({
+const User = sequelize.define('User', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
   name: {
-    type: String,
-    required: [true, 'Name is required'],
-    trim: true,
-    maxlength: [100, 'Name cannot exceed 100 characters']
+    type: DataTypes.STRING(100),
+    allowNull: false,
+    validate: {
+      notEmpty: true,
+      len: [1, 100]
+    }
   },
   email: {
-    type: String,
-    required: [true, 'Email is required'],
+    type: DataTypes.STRING,
+    allowNull: false,
     unique: true,
-    lowercase: true,
-    trim: true,
-    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
+    validate: {
+      isEmail: true,
+      notEmpty: true
+    },
+    set(value) {
+      this.setDataValue('email', value.toLowerCase().trim());
+    }
   },
   password: {
-    type: String,
-    required: [true, 'Password is required'],
-    minlength: [6, 'Password must be at least 6 characters long'],
-    select: false // Don't include password in queries by default
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      len: [6, 255]
+    }
   },
   role: {
-    type: String,
-    enum: ['tourist', 'admin', 'police', 'id_issuer'],
-    default: 'tourist',
-    required: true
+    type: DataTypes.ENUM('tourist', 'admin', 'police', 'id_issuer'),
+    defaultValue: 'tourist',
+    allowNull: false
   },
   status: {
-    type: String,
-    enum: ['active', 'pending', 'suspended'],
-    default: function() {
-      return ['police', 'id_issuer'].includes(this.role) ? 'pending' : 'active';
-    }
+    type: DataTypes.ENUM('active', 'pending', 'suspended'),
+    defaultValue: 'active'
   },
   // Additional fields for police officers
   department: {
-    type: String,
-    required: function() { return this.role === 'police'; }
+    type: DataTypes.STRING,
+    allowNull: true
   },
   badgeNumber: {
-    type: String,
-    required: function() { return this.role === 'police'; },
-    unique: true,
-    sparse: true
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true
   },
   location: {
-    type: String,
-    required: function() { return ['police', 'id_issuer'].includes(this.role); }
+    type: DataTypes.STRING,
+    allowNull: true
   },
   // Additional fields for ID issuers
   idType: {
-    type: String,
-    required: function() { return this.role === 'id_issuer'; }
+    type: DataTypes.STRING,
+    allowNull: true
   },
   // Approval workflow fields
   approvedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
   },
   approvedAt: {
-    type: Date,
-    default: null
+    type: DataTypes.DATE,
+    allowNull: true
   },
   rejectionReason: {
-    type: String,
-    default: null
+    type: DataTypes.STRING,
+    allowNull: true
   },
   avatar: {
-    type: String,
-    default: null
+    type: DataTypes.STRING,
+    allowNull: true
   },
   isActive: {
-    type: Boolean,
-    default: true
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   },
   isVerified: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
   verificationToken: {
-    type: String,
-    default: null
+    type: DataTypes.STRING,
+    allowNull: true
   },
   resetPasswordToken: {
-    type: String,
-    default: null
+    type: DataTypes.STRING,
+    allowNull: true
   },
   resetPasswordExpires: {
-    type: Date,
-    default: null
+    type: DataTypes.DATE,
+    allowNull: true
   },
   lastLogin: {
-    type: Date,
-    default: null
+    type: DataTypes.DATE,
+    allowNull: true
   },
   loginAttempts: {
-    type: Number,
-    default: 0
+    type: DataTypes.INTEGER,
+    defaultValue: 0
   },
   lockUntil: {
-    type: Date,
-    default: null
+    type: DataTypes.DATE,
+    allowNull: true
   },
   preferences: {
-    language: {
-      type: String,
-      default: 'en'
-    },
-    notifications: {
-      email: {
-        type: Boolean,
-        default: true
+    type: DataTypes.JSONB,
+    defaultValue: {
+      language: 'en',
+      notifications: {
+        email: true,
+        push: true,
+        sms: false
       },
-      push: {
-        type: Boolean,
-        default: true
-      },
-      sms: {
-        type: Boolean,
-        default: false
-      }
-    },
-    theme: {
-      type: String,
-      enum: ['light', 'dark', 'auto'],
-      default: 'auto'
+      theme: 'auto'
     }
   },
   metadata: {
-    ipAddress: String,
-    userAgent: String,
-    deviceInfo: {
-      type: String,
-      os: String,
-      browser: String
-    }
+    type: DataTypes.JSONB,
+    defaultValue: {}
   }
 }, {
+  tableName: 'users',
   timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  hooks: {
+    beforeCreate: async (user) => {
+      // Set default status based on role
+      if (['police', 'id_issuer'].includes(user.role) && !user.status) {
+        user.status = 'pending';
+      }
+    }
+  }
+});
+
+// Hooks for password hashing
+User.addHook('beforeCreate', async (user) => {
+  if (user.password) {
+    const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+    user.password = await bcrypt.hash(user.password, saltRounds);
+  }
+});
+
+User.addHook('beforeUpdate', async (user) => {
+  if (user.changed('password')) {
+    const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+    user.password = await bcrypt.hash(user.password, saltRounds);
+  }
 });
 
 // Virtual for account lock status
-userSchema.virtual('isLocked').get(function() {
-  return !!(this.lockUntil && this.lockUntil > Date.now());
-});
-
-// Index for better query performance
-userSchema.index({ email: 1 });
-userSchema.index({ role: 1 });
-userSchema.index({ isActive: 1 });
-userSchema.index({ createdAt: -1 });
-
-// Pre-save middleware to hash password
-userSchema.pre('save', async function(next) {
-  // Only hash the password if it has been modified (or is new)
-  if (!this.isModified('password')) return next();
-  
-  try {
-    // Hash password with cost of 12
-    const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
-    this.password = await bcrypt.hash(this.password, saltRounds);
-    next();
-  } catch (error) {
-    next(error);
+Object.defineProperty(User.prototype, 'isLocked', {
+  get: function() {
+    return !!(this.lockUntil && this.lockUntil > Date.now());
   }
 });
 
-// Instance method to check password
-userSchema.methods.comparePassword = async function(candidatePassword) {
+// Instance methods
+User.prototype.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Instance method to increment login attempts
-userSchema.methods.incLoginAttempts = function() {
+User.prototype.incLoginAttempts = async function() {
   // If we have a previous lock that has expired, restart at 1
   if (this.lockUntil && this.lockUntil < Date.now()) {
-    return this.updateOne({
-      $unset: { lockUntil: 1 },
-      $set: { loginAttempts: 1 }
+    return this.update({
+      lockUntil: null,
+      loginAttempts: 1
     });
   }
   
-  const updates = { $inc: { loginAttempts: 1 } };
+  const updates = { loginAttempts: this.loginAttempts + 1 };
   
   // Lock account after 5 failed attempts for 2 hours
   if (this.loginAttempts + 1 >= 5 && !this.isLocked) {
-    updates.$set = { lockUntil: Date.now() + 2 * 60 * 60 * 1000 }; // 2 hours
+    updates.lockUntil = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours
   }
   
-  return this.updateOne(updates);
+  return this.update(updates);
 };
 
-// Instance method to reset login attempts
-userSchema.methods.resetLoginAttempts = function() {
-  return this.updateOne({
-    $unset: { loginAttempts: 1, lockUntil: 1 }
+User.prototype.resetLoginAttempts = async function() {
+  return this.update({
+    loginAttempts: 0,
+    lockUntil: null
   });
 };
 
-// Static method to find user by email
-userSchema.statics.findByEmail = function(email) {
-  return this.findOne({ email: email.toLowerCase() });
+// Static methods
+User.findByEmail = function(email) {
+  return this.findOne({ where: { email: email.toLowerCase() } });
 };
 
-// Static method to find active users
-userSchema.statics.findActive = function() {
-  return this.find({ isActive: true });
+User.findActive = function() {
+  return this.findAll({ where: { isActive: true } });
 };
 
-// Static method to find users by role
-userSchema.statics.findByRole = function(role) {
-  return this.find({ role, isActive: true });
+User.findByRole = function(role) {
+  return this.findAll({ where: { role, isActive: true } });
 };
 
-// Transform function to remove sensitive data
-userSchema.methods.toJSON = function() {
-  const userObject = this.toObject();
-  delete userObject.password;
-  delete userObject.verificationToken;
-  delete userObject.resetPasswordToken;
-  delete userObject.resetPasswordExpires;
-  delete userObject.loginAttempts;
-  delete userObject.lockUntil;
-  return userObject;
+// Override toJSON to remove sensitive data
+User.prototype.toJSON = function() {
+  const values = Object.assign({}, this.get());
+  delete values.password;
+  delete values.verificationToken;
+  delete values.resetPasswordToken;
+  delete values.resetPasswordExpires;
+  delete values.loginAttempts;
+  delete values.lockUntil;
+  return values;
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = User;

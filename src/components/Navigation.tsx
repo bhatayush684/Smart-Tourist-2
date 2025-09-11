@@ -58,14 +58,9 @@ const Navigation = () => {
           {/* Logo and Brand */}
           <div className="flex items-center space-x-3">
             <Shield className="h-8 w-8 text-primary-foreground drop-shadow" />
-            <div>
-              <h1 className="text-xl font-bold text-primary-foreground drop-shadow">
-                Tourist Safety Platform
-              </h1>
-              <p className="text-xs text-primary-foreground/90">
-                Government of India Initiative
-              </p>
-            </div>
+            <h1 className="text-xl font-bold text-primary-foreground drop-shadow">
+              Smart Tourist
+            </h1>
           </div>
 
           {/* Desktop Navigation */}

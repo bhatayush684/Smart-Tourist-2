@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const { sequelize } = require('../config/database');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Tourist = require('../models/Tourist');
@@ -73,18 +73,17 @@ const sampleUsers = [
 
 async function createSampleUsers() {
   try {
-    // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/tourist-safety', {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    // Connect to PostgreSQL
+    await sequelize.authenticate();
+    console.log('Connected to PostgreSQL');
 
-    console.log('Connected to MongoDB');
+    // Sync models
+    await sequelize.sync({ alter: true });
 
     // Clear existing test users
-    await User.deleteMany({ 
-      email: { 
-        $in: sampleUsers.map(user => user.email) 
+    await User.destroy({ 
+      where: { 
+        email: sampleUsers.map(user => user.email)
       } 
     });
 
@@ -94,22 +93,21 @@ async function createSampleUsers() {
     for (const userData of sampleUsers) {
       try {
         // Check if user already exists
-        const existingUser = await User.findOne({ email: userData.email });
+        const existingUser = await User.findByEmail(userData.email);
         if (existingUser) {
           console.log(`User ${userData.email} already exists, skipping...`);
           continue;
         }
 
         // Create user
-        const user = new User(userData);
-        await user.save();
+        const user = await User.create(userData);
 
         console.log(`✅ Created ${userData.role} user: ${userData.email}`);
 
         // Create tourist profile if user is a tourist
         if (userData.role === 'tourist') {
-          const tourist = new Tourist({
-            userId: user._id,
+          const tourist = await Tourist.create({
+            userId: user.id,
             personalInfo: {
               firstName: userData.name.split(' ')[0],
               lastName: userData.name.split(' ').slice(1).join(' ') || '',
@@ -149,7 +147,6 @@ async function createSampleUsers() {
             }
           });
 
-          await tourist.save();
           console.log(`✅ Created tourist profile for: ${userData.email}`);
         }
 
@@ -176,7 +173,7 @@ async function createSampleUsers() {
   } catch (error) {
     console.error('❌ Error creating sample users:', error);
   } finally {
-    await mongoose.connection.close();
+    await sequelize.close();
     console.log('\n🔌 Database connection closed');
   }
 }
