@@ -65,27 +65,30 @@ const Navigation = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-1">
-            {filteredNavItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link key={item.path} to={item.path}>
-                  <Button
-                    variant={isActive(item.path) ? 'secondary' : 'ghost'}
-                    className={`group relative text-primary-foreground/95 hover:bg-primary-light/25 hover:text-primary-foreground`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="relative">
-                      {item.label}
-                      <span
-                        className={`pointer-events-none absolute left-0 -bottom-1 h-0.5 w-full origin-left scale-x-0 bg-primary-foreground/90 transition-transform duration-200 ease-smooth group-hover:scale-x-100 ${
-                          isActive(item.path) ? 'scale-x-100' : ''
-                        }`}
-                      />
-                    </span>
-                  </Button>
-                </Link>
-              );
-            })}
+            {/* Scrollable nav items to avoid overflow */}
+            <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar max-w-[40vw] lg:max-w-[50vw]">
+              {filteredNavItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link key={item.path} to={item.path}>
+                    <Button
+                      variant={isActive(item.path) ? 'secondary' : 'ghost'}
+                      className={`group relative whitespace-nowrap text-primary-foreground/95 hover:bg-primary-light/25 hover:text-primary-foreground`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span className="relative">
+                        {item.label}
+                        <span
+                          className={`pointer-events-none absolute left-0 -bottom-1 h-0.5 w-full origin-left scale-x-0 bg-primary-foreground/90 transition-transform duration-200 ease-smooth group-hover:scale-x-100 ${
+                            isActive(item.path) ? 'scale-x-100' : ''
+                          }`}
+                        />
+                      </span>
+                    </Button>
+                  </Link>
+                );
+              })}
+            </div>
             
             {/* Desktop Search */}
             <div className="ml-4 hidden lg:flex items-center">
