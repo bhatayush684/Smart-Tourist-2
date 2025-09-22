@@ -29,6 +29,7 @@ export const config = {
   isDevelopment: import.meta.env.DEV,
   isProduction: import.meta.env.PROD,
   nodeEnv: import.meta.env.MODE,
+  demoMode: import.meta.env.VITE_DEMO_MODE === 'true',
   
   // Feature Flags
   enableAnalytics: import.meta.env.VITE_ENABLE_ANALYTICS === 'true',

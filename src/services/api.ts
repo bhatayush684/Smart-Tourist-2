@@ -39,9 +39,75 @@ class ApiService {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    // Demo mode: return minimal mock responses to keep UI functional without backend
+    if (config.demoMode) {
+      const method = (options.method || 'GET').toUpperCase();
+      // Simple router for common endpoints used by dashboards
+      const respond = <R,>(data: R, delay = 200) =>
+        new Promise<R>((resolve) => setTimeout(() => resolve(data), delay));
+
+      // Generic success shapes
+      const ok: any = { success: true };
+
+      if (endpoint.startsWith('/api/admin/dashboard')) {
+        return respond<any>({
+          success: true,
+          data: {
+            totalTourists: 12847,
+            activeTourists: 9680,
+            totalDevices: 2450,
+            activeDevices: 2310,
+            activeAlerts: 12,
+            criticalAlerts: 1,
+            systemHealth: 'healthy',
+          },
+        }) as unknown as T;
+      }
+      if (endpoint.startsWith('/api/dashboard/overview')) {
+        return respond<any>({ success: true, data: {
+          totalTourists: 12847,
+          activeTourists: 9680,
+          totalDevices: 2450,
+          activeDevices: 2310,
+          activeAlerts: 12,
+          criticalAlerts: 1,
+          systemHealth: 'healthy',
+        } }) as unknown as T;
+      }
+      if (endpoint.startsWith('/api/dashboard/statistics')) {
+        return respond<any>({ success: true, data: {
+          period: '7d',
+          tourists: { total: 12847, active: 9680, new: 120, byNationality: { IN: 5400, US: 1200, UK: 800 } },
+          devices: { total: 2450, active: 2310, offline: 140, byType: { smart_band: 1200, tracker: 800, sensor: 400, camera: 50 } },
+          alerts: { total: 340, active: 12, resolved: 320, byType: { emergency: 10, medical: 20, security: 300, device: 5, system: 5 }, bySeverity: { low: 200, medium: 100, high: 35, critical: 5 } },
+        } }) as unknown as T;
+      }
+      if (endpoint.startsWith('/api/dashboard/notifications')) {
+        return respond<any>({ success: true, data: [
+          { id: 'n1', type: 'info', title: 'System Update', message: 'Background sync completed', read: false, createdAt: new Date().toISOString() },
+          { id: 'n2', type: 'warning', title: 'Device Offline', message: 'Tracker #A-102 went offline', read: false, createdAt: new Date().toISOString() },
+        ] }) as unknown as T;
+      }
+      if (endpoint.startsWith('/api/dashboard/activity')) {
+        return respond<any>({ success: true, data: [
+          { id: 'a1', type: 'login', description: 'Admin logged in', createdAt: new Date().toISOString() },
+          { id: 'a2', type: 'alert', description: 'Emergency alert acknowledged', createdAt: new Date().toISOString() },
+        ] }) as unknown as T;
+      }
+      if (endpoint.startsWith('/api/alerts/critical/active')) {
+        return respond<any>({ success: true, data: [] }) as unknown as T;
+      }
+
+      // Fallbacks: return ok with empty data to prevent crashes
+      if (method === 'GET') {
+        return respond<any>({ success: true, data: [] }) as unknown as T;
+      }
+      return respond<any>(ok) as unknown as T;
+    }
+
     const url = `${this.baseURL}${endpoint}`;
-    
-    const config: RequestInit = {
+
+    const requestConfig: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
         ...(this.token && { Authorization: `Bearer ${this.token}` }),
@@ -51,8 +117,8 @@ class ApiService {
     };
 
     try {
-      const response = await fetch(url, config);
-      
+      const response = await fetch(url, requestConfig);
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
@@ -67,37 +133,87 @@ class ApiService {
 
   // Auth methods
   async login(email: string, password: string): Promise<AuthResponse> {
+    if (config.demoMode) {
+      const role = (email.includes('admin') ? 'admin' : email.includes('police') ? 'police' : email.includes('issuer') ? 'id_issuer' : 'tourist') as any;
+      const mock: AuthResponse = {
+        success: true,
+        token: 'demo-token',
+        refreshToken: 'demo-refresh-token',
+        user: {
+          id: 'demo-' + role,
+          name: role.charAt(0).toUpperCase() + role.slice(1) + ' Demo',
+          email,
+          role,
+          status: 'active',
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        } as any,
+      };
+      this.token = mock.token;
+      localStorage.setItem('token', mock.token);
+      localStorage.setItem('refreshToken', mock.refreshToken);
+      localStorage.setItem('demoUser', JSON.stringify(mock.user));
+      return new Promise(resolve => setTimeout(() => resolve(mock), 200));
+    }
+
     const response = await this.request<AuthResponse>('/api/simple-auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    
+
     if (response.success) {
       this.token = response.token;
       localStorage.setItem('token', response.token);
       localStorage.setItem('refreshToken', response.refreshToken);
     }
-    
+
     return response;
   }
 
   async register(userData: RegisterRequest): Promise<AuthResponse> {
+    if (config.demoMode) {
+      const mock: AuthResponse = {
+        success: true,
+        token: 'demo-token',
+        refreshToken: 'demo-refresh-token',
+        user: {
+          id: 'demo-' + userData.role,
+          name: userData.name,
+          email: userData.email,
+          role: userData.role as any,
+          status: 'active',
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        } as any,
+      };
+      this.token = mock.token;
+      localStorage.setItem('token', mock.token);
+      localStorage.setItem('refreshToken', mock.refreshToken);
+      localStorage.setItem('demoUser', JSON.stringify(mock.user));
+      return new Promise(resolve => setTimeout(() => resolve(mock), 200));
+    }
+
     const response = await this.request<AuthResponse>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
-    
+
     if (response.success) {
       this.token = response.token;
       localStorage.setItem('token', response.token);
       localStorage.setItem('refreshToken', response.refreshToken);
     }
-    
+
     return response;
   }
 
   async logout(): Promise<void> {
     try {
+      if (config.demoMode) {
+        return new Promise((resolve) => setTimeout(resolve, 100));
+      }
       await this.request('/api/auth/logout', { method: 'POST' });
     } finally {
       this.token = null;
@@ -107,13 +223,31 @@ class ApiService {
   }
 
   async verifyToken(): Promise<TokenVerificationResponse> {
+    if (config.demoMode) {
+      const demo = localStorage.getItem('demoUser');
+      const user = demo ? JSON.parse(demo) : null;
+      return new Promise(resolve => setTimeout(() => resolve({ success: !!user, user }), 100));
+    }
     return this.request<TokenVerificationResponse>('/api/simple-auth/verify');
   }
 
   async refreshToken(): Promise<AuthResponse> {
     const refreshToken = localStorage.getItem('refreshToken');
     if (!refreshToken) throw new Error('No refresh token available');
-    
+
+    if (config.demoMode) {
+      const mock: AuthResponse = {
+        success: true,
+        token: 'demo-token',
+        refreshToken: 'demo-refresh-token',
+        user: JSON.parse(localStorage.getItem('demoUser') || '{}') as any,
+      };
+      this.token = mock.token;
+      localStorage.setItem('token', mock.token);
+      localStorage.setItem('refreshToken', mock.refreshToken);
+      return new Promise(resolve => setTimeout(() => resolve(mock), 200));
+    }
+
     const response = await this.request<AuthResponse>('/api/auth/refresh', {
       method: 'POST',
       body: JSON.stringify({ refreshToken }),

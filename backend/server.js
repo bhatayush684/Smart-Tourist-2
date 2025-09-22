@@ -68,9 +68,17 @@ app.use(limiter);
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://your-domain.com'] 
-    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'],
+  origin: (() => {
+    if (process.env.NODE_ENV === 'production') {
+      // Support a comma-separated list in FRONTEND_ORIGIN
+      const origins = process.env.FRONTEND_ORIGIN || process.env.WS_CORS_ORIGIN;
+      if (origins) {
+        return origins.split(',').map((o) => o.trim());
+      }
+      return [];
+    }
+    return ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'];
+  })(),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']

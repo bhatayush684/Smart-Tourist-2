@@ -74,6 +74,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   }, [subscribers]);
 
   const connectWebSocket = useCallback(() => {
+    if (config.demoMode) {
+      // Disable WebSocket in demo mode
+      setIsConnected(false);
+      setSocket(null);
+      return;
+    }
     try {
       const wsUrl = config.isProduction 
         ? config.wsUrl.replace('ws://', 'wss://')
@@ -133,6 +139,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   }, [socket]);
 
   useEffect(() => {
+    if (config.demoMode) {
+      // Ensure no connection attempts in demo mode
+      disconnectWebSocket();
+      return;
+    }
     if (isAuthenticated && user) {
       connectWebSocket();
     } else {

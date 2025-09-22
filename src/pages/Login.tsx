@@ -23,6 +23,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import config from '../config/environment';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -31,6 +32,7 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [role, setRole] = useState<'tourist' | 'admin' | 'police' | 'id_issuer'>('tourist');
   
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -45,7 +47,11 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      await login(email, password);
+      if (config.demoMode) {
+        await login(email, password, role);
+      } else {
+        await login(email, password);
+      }
       navigate('/');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
@@ -161,6 +167,26 @@ const Login: React.FC = () => {
                   </Alert>
                 )}
 
+                {config.demoMode && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-700">Select Role (Demo Mode)</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['tourist','admin','police','id_issuer'] as const).map(r => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setRole(r)}
+                          className={`h-10 rounded-md border text-sm font-medium transition-colors ${role===r ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                          disabled={loading}
+                        >
+                          {r.replace('_', ' ').toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500">Use any email/password. Authentication is mocked.</p>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-sm font-medium text-gray-700">Email Address</Label>
                   <Input
@@ -204,6 +230,37 @@ const Login: React.FC = () => {
                     </Button>
                   </div>
                 </div>
+
+                {config.demoMode && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['admin','police'] as const).map(r => (
+                      <Button
+                        key={r}
+                        type="button"
+                        variant="secondary"
+                        onClick={async () => {
+                          setRole(r);
+                          setEmail(`${r}@demo.local`);
+                          setPassword('demo');
+                          setLoading(true);
+                          setError('');
+                          try {
+                            await login(`${r}@demo.local`, 'demo', r);
+                            navigate('/');
+                          } catch (err: unknown) {
+                            setError(err instanceof Error ? err.message : 'Login failed.');
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                        className="h-10"
+                        disabled={loading}
+                      >
+                        Quick Login: {r.replace('_',' ').toUpperCase()}
+                      </Button>
+                    ))}
+                  </div>
+                )}
 
                 <Button
                   type="submit"

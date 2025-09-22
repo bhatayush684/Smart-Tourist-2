@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../services/api';
+import config from '../config/environment';
 
 interface User {
   id: string;
@@ -18,7 +19,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, roleOverride?: User['role']) => Promise<void>;
   register: (userData: RegisterData) => Promise<void>;
   logout: () => void;
   loading: boolean;
@@ -60,6 +61,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     // Check for existing token on app load
     const token = localStorage.getItem('token');
+    if (config.demoMode) {
+      const demoUser = localStorage.getItem('demoUser');
+      if (demoUser) {
+        try {
+          setUser(JSON.parse(demoUser));
+        } catch {}
+      }
+      setLoading(false);
+      return;
+    }
+
     if (token) {
       // Verify token with backend
       verifyToken(token);
@@ -69,6 +81,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const verifyToken = async (token: string) => {
+    if (config.demoMode) {
+      // In demo mode, trust local user
+      const demoUser = localStorage.getItem('demoUser');
+      if (demoUser) {
+        try {
+          setUser(JSON.parse(demoUser));
+        } catch {}
+      }
+      setLoading(false);
+      return;
+    }
     try {
       const response = await apiService.verifyToken();
       if (response.success) {
@@ -84,8 +107,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, roleOverride?: User['role']) => {
     try {
+      if (config.demoMode) {
+        // Create a mock user with selected role
+        const role = roleOverride || 'tourist';
+        const mockUser: User = {
+          id: 'demo-' + role,
+          email: email || `${role}@demo.local`,
+          name: role.charAt(0).toUpperCase() + role.slice(1) + ' Demo',
+          role,
+          status: 'active',
+        };
+        // Set fake tokens
+        localStorage.setItem('token', 'demo-token');
+        localStorage.setItem('refreshToken', 'demo-refresh-token');
+        localStorage.setItem('demoUser', JSON.stringify(mockUser));
+        setUser(mockUser);
+        navigate('/');
+        return;
+      }
+
       const response = await apiService.login(email, password);
       if (response.success) {
         setUser(response.user);
@@ -99,6 +141,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const register = async (userData: RegisterData) => {
     try {
+      if (config.demoMode) {
+        const mockUser: User = {
+          id: 'demo-' + userData.role,
+          email: userData.email,
+          name: userData.name,
+          role: userData.role,
+          status: 'active',
+        };
+        localStorage.setItem('token', 'demo-token');
+        localStorage.setItem('refreshToken', 'demo-refresh-token');
+        localStorage.setItem('demoUser', JSON.stringify(mockUser));
+        setUser(mockUser);
+        navigate('/');
+        return;
+      }
+
       const response = await apiService.register(userData);
       if (response.success) {
         setUser(response.user);
@@ -112,11 +170,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await apiService.logout();
+      if (!config.demoMode) {
+        await apiService.logout();
+      }
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
       setUser(null);
+      localStorage.removeItem('demoUser');
       navigate('/login');
     }
   };
