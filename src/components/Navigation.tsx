@@ -64,9 +64,9 @@ const Navigation = () => {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-1">
+          <div className="hidden md:flex items-center space-x-1 w-full">
             {/* Scrollable nav items to avoid overflow */}
-            <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar max-w-[40vw] lg:max-w-[50vw]">
+            <div className="flex-1 min-w-0 flex items-center space-x-1 overflow-x-auto no-scrollbar">
               {filteredNavItems.map((item) => {
                 const Icon = item.icon;
                 return (

@@ -52,7 +52,6 @@ const Login: React.FC = () => {
       } else {
         await login(email, password);
       }
-      navigate('/');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
     } finally {
@@ -175,7 +174,22 @@ const Login: React.FC = () => {
                         <button
                           key={r}
                           type="button"
-                          onClick={() => setRole(r)}
+                          onClick={async () => {
+                            setRole(r);
+                            const demoEmail = `${r}@demo.local`;
+                            const demoPass = 'demo';
+                            setEmail(demoEmail);
+                            setPassword(demoPass);
+                            setLoading(true);
+                            setError('');
+                            try {
+                              await login(demoEmail, demoPass, r);
+                            } catch (err: unknown) {
+                              setError(err instanceof Error ? err.message : 'Login failed.');
+                            } finally {
+                              setLoading(false);
+                            }
+                          }}
                           className={`h-10 rounded-md border text-sm font-medium transition-colors ${role===r ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
                           disabled={loading}
                         >
@@ -246,7 +260,6 @@ const Login: React.FC = () => {
                           setError('');
                           try {
                             await login(`${r}@demo.local`, 'demo', r);
-                            navigate('/');
                           } catch (err: unknown) {
                             setError(err instanceof Error ? err.message : 'Login failed.');
                           } finally {
