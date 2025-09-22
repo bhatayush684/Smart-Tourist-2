@@ -233,7 +233,7 @@ const Login: React.FC = () => {
 
                 {config.demoMode && (
                   <div className="grid grid-cols-2 gap-2">
-                    {(['admin','police'] as const).map(r => (
+                    {(['admin','police','tourist','id_issuer'] as const).map(r => (
                       <Button
                         key={r}
                         type="button"
@@ -256,7 +256,7 @@ const Login: React.FC = () => {
                         className="h-10"
                         disabled={loading}
                       >
-                        Quick Login: {r.replace('_',' ').toUpperCase()}
+                        Quick Login: {r === 'id_issuer' ? 'ID ISSUER' : r.toUpperCase()}
                       </Button>
                     ))}
                   </div>
