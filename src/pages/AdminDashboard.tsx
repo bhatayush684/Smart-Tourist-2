@@ -136,7 +136,7 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-surface">
-      <div className="container mx-auto p-6 space-y-8">
+      <div className="w-full px-4 sm:px-6 lg:px-10 py-6 space-y-8">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-4xl font-bold text-foreground">Admin Dashboard</h1>
