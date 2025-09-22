@@ -137,12 +137,12 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-surface">
       <div className="w-full px-4 sm:px-6 lg:px-10 py-6 space-y-8">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-foreground">Admin Dashboard</h1>
-            <p className="text-xl text-muted-foreground">Monitor and manage tourist safety in real-time</p>
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Admin Dashboard</h1>
+            <p className="text-base sm:text-xl text-muted-foreground">Monitor and manage tourist safety in real-time</p>
           </div>
-          <Button variant="default" size="lg">
+          <Button variant="default" size="lg" className="w-full sm:w-auto">
             <Download className="w-4 h-4" />
             Export Report
           </Button>
@@ -153,7 +153,7 @@ const AdminDashboard = () => {
           {stats.map((stat, index) => {
             const Icon = stat.icon;
             return (
-              <Card key={index} className="shadow-card-custom border-card-border">
+              <Card key={index} className="shadow-card-custom border-card-border overflow-hidden">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -172,7 +172,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* Real-time Alerts */}
-        <Card className="shadow-government border-warning/20">
+        <Card className="shadow-government border-warning/20 overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Zap className="w-6 h-6 text-warning" />
@@ -218,7 +218,7 @@ const AdminDashboard = () => {
         </Card>
 
         {/* Tourist Monitoring */}
-        <Card className="shadow-card-custom">
+        <Card className="shadow-card-custom overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Users className="w-6 h-6 text-primary" />
@@ -286,7 +286,7 @@ const AdminDashboard = () => {
                         {tourist.status.toUpperCase()}
                       </div>
                       <div>
-                        <h4 className="font-semibold text-lg">{tourist.name}</h4>
+                        <h4 className="font-semibold text-base sm:text-lg">{tourist.name}</h4>
                         <p className="text-sm text-muted-foreground">ID: {tourist.id}</p>
                         <p className="text-sm text-muted-foreground">Nationality: {tourist.nationality}</p>
                       </div>
@@ -297,41 +297,47 @@ const AdminDashboard = () => {
                         <span className="text-sm text-muted-foreground">Safety Score:</span>
                         <span className={`font-bold ${
                           tourist.safetyScore >= 70 ? 'text-safety' :
-                          tourist.safetyScore >= 40 ? 'text-warning' : 'text-emergency'
-                        }`}>
-                          {tourist.safetyScore}%
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">Last seen: {tourist.lastSeen}</p>
-                      {tourist.alerts > 0 && (
-                        <p className="text-sm text-emergency font-medium">
-                          {tourist.alerts} active alerts
-                        </p>
-                      )}
                     </div>
                   </div>
                   
-                  <div className="mt-3 flex items-center justify-between">
+                  <div className="text-right space-y-1">
                     <div className="flex items-center space-x-2">
-                      <MapPin className="w-4 h-4 text-primary" />
-                      <span className="text-sm">{tourist.lastLocation}</span>
+                      <span className="text-sm text-muted-foreground">Safety Score:</span>
+                      <span className={`font-bold ${
+                        tourist.safetyScore >= 70 ? 'text-safety' :
+                        tourist.safetyScore >= 40 ? 'text-warning' : 'text-emergency'
+                      }`}>
+                        {tourist.safetyScore}%
+                      </span>
                     </div>
-                    
-                    <div className="flex space-x-2">
-                      <Button variant="outline" size="sm">
-                        <Eye className="w-3 h-3" />
-                        Track
+                    <p className="text-xs sm:text-sm text-muted-foreground">Last seen: {tourist.lastSeen}</p>
+                    {tourist.alerts > 0 && (
+                      <p className="text-sm text-emergency font-medium">
+                        {tourist.alerts} active alerts
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    <span className="text-sm">{tourist.lastLocation}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 sm:flex sm:space-x-2">
+                    <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                      <Eye className="w-3 h-3" />
+                      Track
+                    </Button>
+                    <Button variant="government" size="sm" className="w-full sm:w-auto">
+                      <FileText className="w-3 h-3" />
+                      Details
+                    </Button>
+                    {tourist.status === 'alert' && (
+                      <Button variant="emergency" size="sm" className="w-full sm:w-auto">
+                        Generate E-FIR
                       </Button>
-                      <Button variant="government" size="sm">
-                        <FileText className="w-3 h-3" />
-                        Details
-                      </Button>
-                      {tourist.status === 'alert' && (
-                        <Button variant="emergency" size="sm">
-                          Generate E-FIR
-                        </Button>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -340,7 +346,7 @@ const AdminDashboard = () => {
         </Card>
 
         {/* Heatmap Placeholder */}
-        <Card className="shadow-card-custom">
+        <Card className="shadow-card-custom overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <MapPin className="w-6 h-6 text-primary" />
