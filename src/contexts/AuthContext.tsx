@@ -58,6 +58,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  const defaultRouteForRole = (role?: User['role']) => {
+    switch (role) {
+      case 'admin':
+        return '/admin';
+      case 'police':
+        return '/police-dashboard';
+      case 'id_issuer':
+        return '/id-verification';
+      case 'tourist':
+      default:
+        return '/tourist-app';
+    }
+  };
+
   useEffect(() => {
     // Check for existing token on app load
     const token = localStorage.getItem('token');
@@ -124,14 +138,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem('refreshToken', 'demo-refresh-token');
         localStorage.setItem('demoUser', JSON.stringify(mockUser));
         setUser(mockUser);
-        navigate('/');
+        navigate(defaultRouteForRole(role));
         return;
       }
 
       const response = await apiService.login(email, password);
       if (response.success) {
         setUser(response.user);
-        navigate('/');
+        navigate(defaultRouteForRole(response.user.role));
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -153,14 +167,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem('refreshToken', 'demo-refresh-token');
         localStorage.setItem('demoUser', JSON.stringify(mockUser));
         setUser(mockUser);
-        navigate('/');
+        navigate(defaultRouteForRole(mockUser.role));
         return;
       }
 
       const response = await apiService.register(userData);
       if (response.success) {
         setUser(response.user);
-        navigate('/');
+        navigate(defaultRouteForRole(response.user.role));
       }
     } catch (error) {
       console.error('Registration error:', error);
