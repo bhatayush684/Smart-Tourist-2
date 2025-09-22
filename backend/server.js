@@ -197,9 +197,8 @@ const connectDB = async () => {
     const isConnected = await testConnection();
     
     if (isConnected) {
-      // Sync all models with the database
-      await sequelize.sync({ alter: true });
-      console.log('✅ PostgreSQL database synced successfully');
+      console.log('✅ PostgreSQL connection established successfully');
+      console.log('✅ Database is ready for use');
     } else {
       throw new Error('Failed to connect to PostgreSQL');
     }

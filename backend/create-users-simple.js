@@ -46,9 +46,11 @@ async function createUsers() {
     await client.connect();
     console.log('✅ Connected to database');
 
-    // Create users table if it doesn't exist
+    // Drop and recreate users table to ensure clean state
+    await client.query('DROP TABLE IF EXISTS users CASCADE');
+    
     await client.query(`
-      CREATE TABLE IF NOT EXISTS users (
+      CREATE TABLE users (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
@@ -62,8 +64,7 @@ async function createUsers() {
 
     console.log('✅ Users table ready');
 
-    // Clear existing test users
-    await client.query('DELETE FROM users WHERE email = ANY($1)', [sampleUsers.map(u => u.email)]);
+    // Users table is now clean, no need to delete
 
     // Create sample users
     for (const user of sampleUsers) {

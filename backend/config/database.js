@@ -27,9 +27,20 @@ const testConnection = async () => {
   try {
     await sequelize.authenticate();
     console.log('✅ PostgreSQL connection established successfully');
+    
+    // Also test with a simple query
+    await sequelize.query('SELECT 1');
+    console.log('✅ Database query test successful');
+    
     return true;
   } catch (error) {
     console.error('❌ Unable to connect to PostgreSQL:', error.message);
+    console.error('❌ Connection details:', {
+      host: process.env.DB_HOST || 'localhost',
+      port: process.env.DB_PORT || 5432,
+      database: process.env.DB_NAME || 'tourist_safety_platform',
+      username: process.env.DB_USER || 'postgres'
+    });
     console.log('💡 Continuing without database for now...');
     return false;
   }

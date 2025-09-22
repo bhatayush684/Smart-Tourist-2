@@ -1,9 +1,25 @@
 // Environment configuration
 export const config = {
   // API Configuration
-  apiUrl: 'http://localhost:5000',
-  API_URL: 'http://localhost:5000',
-  wsUrl: import.meta.env.VITE_WS_URL || 'ws://localhost:5000/ws',
+  apiUrl: import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? `${window.location.origin}` : 'http://localhost:5000'),
+  API_URL: import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? `${window.location.origin}` : 'http://localhost:5000'),
+  wsUrl:
+    import.meta.env.VITE_WS_URL ||
+    (() => {
+      const api = (import.meta.env.VITE_API_URL as string | undefined) ||
+        (typeof window !== 'undefined' ? `${window.location.origin}` : 'http://localhost:5000');
+      try {
+        const url = new URL(api);
+        url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        // Append "/socket.io" if not provided; your server listens on "/socket.io"
+        // If a custom WS path is provided via VITE_WS_PATH, respect it
+        const wsPath = (import.meta.env.VITE_WS_PATH as string | undefined) || '/socket.io';
+        url.pathname = wsPath;
+        return url.toString();
+      } catch (_) {
+        return 'ws://localhost:5000/socket.io';
+      }
+    })(),
   
   // App Configuration
   appName: import.meta.env.VITE_APP_NAME || 'Tourist Safety Platform',
